@@ -28,10 +28,19 @@ Aspects to consider for the development of the workshop:
 3. 15.0% Cloud design patterns (minimum two)
 4. 15.0% Architecture diagram
 5. 15.0% Development pipelines (including scripts for tasks that require them)
-6.5.0% Infrastructure pipelines (including scripts for tasks that require them)
+6. 5.0% Infrastructure pipelines (including scripts for tasks that require them)
+
+
 7. 20.0% Infrastructure implementation
+
+
 8. 15.0% Live demonstration of changes in the pipeline
+
+
 9. 10.0% Delivery of results: must include the necessary documentation
 for all developed elements.
+
+
+
 Regarding patterns, consider using two of the following: cache aside,
 circuit breaker, autoscaling, federated identity.
