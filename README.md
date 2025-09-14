@@ -15,3 +15,27 @@ In each folder you can find a more in-depth explanation of each component:
 
 Take a look at the components diagram that describes them and their interactions.
 ![microservice-app-example](/arch-img/Microservices.png)
+
+
+You should also:
+
+For this project, you must work on both the development and operations sides,
+considering the different aspects so that the project can be used by
+an agile team. Initially, you must choose the agile methodology to use.
+Aspects to consider for the development of the workshop:
+1. 2.5% Branching strategy for developers
+2. 2.5% Branching strategy for operations
+3. 15.0% Cloud design patterns (minimum two)
+4. 15.0% Architecture diagram
+5. 15.0% Development pipelines (including scripts for tasks that require them)
+6.
+5.0% Infrastructure pipelines (including scripts for tasks that require them)
+7.
+7. 20.0% Infrastructure implementation
+8. 15.0% Live demonstration of changes in the pipeline
+9. 10.0% Delivery of results: must include the necessary documentation
+for all developed elements.
+Regarding patterns, consider using two of the following: cache aside,
+circuit breaker, autoscaling, federated identity.
+
+Translated with DeepL.com (free version)
