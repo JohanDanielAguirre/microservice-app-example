@@ -35,5 +35,3 @@ Aspects to consider for the development of the workshop:
 for all developed elements.
 Regarding patterns, consider using two of the following: cache aside,
 circuit breaker, autoscaling, federated identity.
-
-Translated with DeepL.com (free version)
