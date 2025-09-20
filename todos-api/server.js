@@ -30,7 +30,11 @@ const redisClient = require("redis").createClient({
   }        
 });
 const port = process.env.TODO_API_PORT || 8082
-const jwtSecret = process.env.JWT_SECRET || "foo"
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret) {
+  console.error('JWT_SECRET environment variable is required')
+  process.exit(1)
+}
 
 const app = express()
 
@@ -46,11 +50,23 @@ const localServiceName = 'todos-api';
 const tracer = new Tracer({ctxImpl, recorder, localServiceName});
 
 
+// Security headers
+app.use(function(req, res, next) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
+
 app.use(jwt({ secret: jwtSecret }))
 app.use(zipkinMiddleware({tracer}));
 app.use(function (err, req, res, next) {
   if (err.name === 'UnauthorizedError') {
-    res.status(401).send({ message: 'invalid token' })
+    res.status(401).json({ error: 'Invalid token' })
+  } else {
+    console.error('Unexpected error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 })
 app.use(bodyParser.urlencoded({ extended: false }))

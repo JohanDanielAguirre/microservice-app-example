@@ -3,6 +3,34 @@ const cache = require('memory-cache');
 const {Annotation, 
     jsonEncoder: {JSON_V2}} = require('zipkin');
 
+// Simple mutex implementation for concurrency safety
+class Mutex {
+    constructor() {
+        this.locked = false;
+        this.queue = [];
+    }
+
+    async lock() {
+        return new Promise((resolve) => {
+            if (!this.locked) {
+                this.locked = true;
+                resolve();
+            } else {
+                this.queue.push(resolve);
+            }
+        });
+    }
+
+    unlock() {
+        if (this.queue.length > 0) {
+            const next = this.queue.shift();
+            next();
+        } else {
+            this.locked = false;
+        }
+    }
+}
+
 const OPERATION_CREATE = 'CREATE',
       OPERATION_DELETE = 'DELETE';
 
@@ -11,43 +39,79 @@ class TodoController {
         this._tracer = tracer;
         this._redisClient = redisClient;
         this._logChannel = logChannel;
+        this._mutex = new Mutex();
     }
 
-    // TODO: these methods are not concurrent-safe
-    list (req, res) {
-        const data = this._getTodoData(req.user.username)
-
-        res.json(data.items)
-    }
-
-    create (req, res) {
-        // TODO: must be transactional and protected for concurrent access, but
-        // the purpose of the whole example app it's enough
-        const data = this._getTodoData(req.user.username)
-        const todo = {
-            content: req.body.content,
-            id: data.lastInsertedID
+    // TODO: these methods are not concurrent-safe - is finish i just need to someone check it out and test it fully
+    async list (req, res) {
+        try {
+            await this._mutex.lock();
+            const data = this._getTodoData(req.user.username);
+            res.json(data.items);
+        } catch (error) {
+            console.error('Error in list operation:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        } finally {
+            this._mutex.unlock();
         }
-        data.items[data.lastInsertedID] = todo
-
-        data.lastInsertedID++
-        this._setTodoData(req.user.username, data)
-
-        this._logOperation(OPERATION_CREATE, req.user.username, todo.id)
-
-        res.json(todo)
     }
 
-    delete (req, res) {
-        const data = this._getTodoData(req.user.username)
-        const id = req.params.taskId
-        delete data.items[id]
-        this._setTodoData(req.user.username, data)
+    async create (req, res) {
+        // TODO: must be transactional and protected for concurrent access, but
+        // the purpose of the whole example app it's enough - is finish i just need to someone check it out and test it fully
+        try {
+            await this._mutex.lock();
+            
+            // Validate input
+            if (!req.body.content || typeof req.body.content !== 'string') {
+                return res.status(400).json({ error: 'Content is required and must be a string' });
+            }
 
-        this._logOperation(OPERATION_DELETE, req.user.username, id)
+            const data = this._getTodoData(req.user.username);
+            const todo = {
+                content: req.body.content.trim(),
+                id: data.lastInsertedID
+            };
+            
+            data.items[data.lastInsertedID] = todo;
+            data.lastInsertedID++;
+            this._setTodoData(req.user.username, data);
 
-        res.status(204)
-        res.send()
+            this._logOperation(OPERATION_CREATE, req.user.username, todo.id);
+
+            res.json(todo);
+        } catch (error) {
+            console.error('Error in create operation:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        } finally {
+            this._mutex.unlock();
+        }
+    }
+
+    async delete (req, res) {
+        try {
+            await this._mutex.lock();
+            
+            const data = this._getTodoData(req.user.username);
+            const id = req.params.taskId;
+            
+            // Validate that the todo exists
+            if (!data.items[id]) {
+                return res.status(404).json({ error: 'Todo not found' });
+            }
+            
+            delete data.items[id];
+            this._setTodoData(req.user.username, data);
+
+            this._logOperation(OPERATION_DELETE, req.user.username, id);
+
+            res.status(204).send();
+        } catch (error) {
+            console.error('Error in delete operation:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        } finally {
+            this._mutex.unlock();
+        }
     }
 
     _logOperation (opName, username, todoId) {

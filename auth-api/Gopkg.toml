@@ -22,8 +22,8 @@
 
 
 [[constraint]]
-  name = "github.com/dgrijalva/jwt-go"
-  version = "3.1.0"
+  name = "github.com/golang-jwt/jwt/v4"
+  version = "4.2.0"
 
 [[constraint]]
   name = "github.com/labstack/echo"

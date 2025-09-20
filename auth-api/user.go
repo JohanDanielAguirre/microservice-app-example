@@ -3,11 +3,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v4"
+)
+
+// Business logic errors
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrUserServiceError  = errors.New("user service error")
 )
 
 var allowedUserHashes = map[string]interface{}{
@@ -42,7 +50,7 @@ func (h *UserService) Login(ctx context.Context, username, password string) (Use
 	userKey := fmt.Sprintf("%s_%s", username, password)
 
 	if _, ok := h.AllowedUserHashes[userKey]; !ok {
-		return user, ErrWrongCredentials // this is BAD, business logic layer must not return HTTP-specific errors
+		return user, ErrInvalidCredentials // this is BAD, business logic layer must not return HTTP-specific errors - is finish i just need to someone check it out and test it fully
 	}
 
 	return user, nil

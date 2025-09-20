@@ -5,6 +5,7 @@ import com.elgris.usersapi.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -20,6 +21,7 @@ public class UsersController {
 
 
     @RequestMapping(value = "/", method = RequestMethod.GET)
+    @Transactional(readOnly = true)
     public List<User> getUsers() {
         List<User> response = new LinkedList<>();
         userRepository.findAll().forEach(response::add);
@@ -28,6 +30,7 @@ public class UsersController {
     }
 
     @RequestMapping(value = "/{username}",  method = RequestMethod.GET)
+    @Transactional(readOnly = true)
     public User getUser(HttpServletRequest request, @PathVariable("username") String username) {
 
         Object requestAttribute = request.getAttribute("claims");
@@ -41,7 +44,12 @@ public class UsersController {
             throw new AccessDeniedException("No access for requested entity");
         }
 
-        return userRepository.findOneByUsername(username);
+        User user = userRepository.findOneByUsername(username);
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+        
+        return user;
     }
 
 }

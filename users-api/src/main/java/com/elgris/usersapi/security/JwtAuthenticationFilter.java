@@ -2,7 +2,8 @@ package com.elgris.usersapi.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.GenericFilterBean;
@@ -41,12 +42,13 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
             final String token = authHeader.substring(7);
 
             try {
-                final Claims claims = Jwts.parser()
-                        .setSigningKey(jwtSecret.getBytes())
+                final Claims claims = Jwts.parserBuilder()
+                        .setSigningKey(Keys.hmacShaKeyFor(jwtSecret.getBytes()))
+                        .build()
                         .parseClaimsJws(token)
                         .getBody();
                 request.setAttribute("claims", claims);
-            } catch (final SignatureException e) {
+            } catch (final JwtException e) {
                 throw new ServletException("Invalid token");
             }
 
