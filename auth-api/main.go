@@ -33,6 +33,7 @@ func main() {
 	}
 	jwtSecret = envJwtSecret
 
+	cacheService := NewCacheService()
 	userService := UserService{
 		Client:         http.DefaultClient,
 		UserAPIAddress: userAPIAddress,
@@ -41,6 +42,7 @@ func main() {
 			"johnd_foo":   nil,
 			"janed_ddd":   nil,
 		},
+		Cache: cacheService,
 	}
 
 	e := echo.New()

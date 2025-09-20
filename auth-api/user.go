@@ -39,6 +39,7 @@ type UserService struct {
 	Client            HTTPDoer
 	UserAPIAddress    string
 	AllowedUserHashes map[string]interface{}
+	Cache             *CacheService
 }
 
 func (h *UserService) Login(ctx context.Context, username, password string) (User, error) {
@@ -59,6 +60,19 @@ func (h *UserService) Login(ctx context.Context, username, password string) (Use
 func (h *UserService) getUser(ctx context.Context, username string) (User, error) {
 	var user User
 
+	// Cache Aside Pattern: Check cache first
+	cacheKey := fmt.Sprintf("user:%s", username)
+	if cachedUser, err := h.Cache.Get(ctx, cacheKey); err == nil && cachedUser != nil {
+		if userMap, ok := cachedUser.(map[string]interface{}); ok {
+			user.Username = userMap["username"].(string)
+			user.FirstName = userMap["firstname"].(string)
+			user.LastName = userMap["lastname"].(string)
+			user.Role = userMap["role"].(string)
+			return user, nil
+		}
+	}
+
+	// Cache miss: Load from user API
 	token, err := h.getUserAPIToken(username)
 	if err != nil {
 		return user, err
@@ -85,8 +99,14 @@ func (h *UserService) getUser(ctx context.Context, username string) (User, error
 	}
 
 	err = json.Unmarshal(bodyBytes, &user)
+	if err != nil {
+		return user, err
+	}
 
-	return user, err
+	// Cache Aside Pattern: Store in cache after successful load
+	h.Cache.Set(ctx, cacheKey, user, 10*time.Minute)
+
+	return user, nil
 }
 
 func (h *UserService) getUserAPIToken(username string) (string, error) {

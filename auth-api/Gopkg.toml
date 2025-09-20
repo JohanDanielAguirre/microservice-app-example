@@ -32,3 +32,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/openzipkin/zipkin-go"
+
+[[constraint]]
+  name = "github.com/go-redis/redis/v8"
+  version = "8.11.5"

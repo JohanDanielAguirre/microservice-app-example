@@ -1,5 +1,6 @@
 'use strict';
 const cache = require('memory-cache');
+const CacheService = require('./cacheService');
 const {Annotation, 
     jsonEncoder: {JSON_V2}} = require('zipkin');
 
@@ -40,13 +41,25 @@ class TodoController {
         this._redisClient = redisClient;
         this._logChannel = logChannel;
         this._mutex = new Mutex();
+        this._cacheService = new CacheService();
+        this._cacheService.connect();
     }
 
     // TODO: these methods are not concurrent-safe - is finish i just need to someone check it out and test it fully
     async list (req, res) {
         try {
             await this._mutex.lock();
-            const data = this._getTodoData(req.user.username);
+            
+            // Cache Aside Pattern: Check cache first
+            const cacheKey = `todos:${req.user.username}`;
+            let data = await this._cacheService.get(cacheKey);
+            
+            if (!data) {
+                // Cache miss: Load from memory cache and store in Redis
+                data = this._getTodoData(req.user.username);
+                await this._cacheService.set(cacheKey, data, 300); // 5 minutes TTL
+            }
+            
             res.json(data.items);
         } catch (error) {
             console.error('Error in list operation:', error);
@@ -77,6 +90,10 @@ class TodoController {
             data.lastInsertedID++;
             this._setTodoData(req.user.username, data);
 
+            // Cache Aside Pattern: Invalidate cache after write
+            const cacheKey = `todos:${req.user.username}`;
+            await this._cacheService.del(cacheKey);
+
             this._logOperation(OPERATION_CREATE, req.user.username, todo.id);
 
             res.json(todo);
@@ -102,6 +119,10 @@ class TodoController {
             
             delete data.items[id];
             this._setTodoData(req.user.username, data);
+
+            // Cache Aside Pattern: Invalidate cache after write
+            const cacheKey = `todos:${req.user.username}`;
+            await this._cacheService.del(cacheKey);
 
             this._logOperation(OPERATION_DELETE, req.user.username, id);
 

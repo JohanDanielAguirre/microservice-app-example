@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: microservices-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=your-redis-password
+    networks:
+      - microservices-network
+
+  # Para desarrollo local con Redis local
+  todos-api-local:
+    build: ./todos-api
+    container_name: todos-api-cache
+    ports:
+      - "8082:8082"
+    environment:
+      - NODE_ENV=development
+      - TODO_API_PORT=8082
+      - JWT_SECRET=your-jwt-secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_KEY=your-redis-password
+      - REDIS_SSL=false
+      - REDIS_CHANNEL=log_channel
+    depends_on:
+      - redis
+    networks:
+      - microservices-network
+
+  auth-api-local:
+    build: ./auth-api
+    container_name: auth-api-cache
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_API_PORT=8000
+      - JWT_SECRET=your-jwt-secret
+      - USERS_API_ADDRESS=http://users-api:8081
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_KEY=your-redis-password
+    depends_on:
+      - redis
+    networks:
+      - microservices-network
+
+volumes:
+  redis_data:
+
+networks:
+  microservices-network:
+    driver: bridge
