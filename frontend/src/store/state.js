@@ -7,7 +7,8 @@ let syncedData = {
     refreshToken: null
   },
   user: {
-    name: null
+    name: null,
+    role: null
   }
 }
 

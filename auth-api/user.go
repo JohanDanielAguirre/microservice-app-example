@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	jwt "github.com/golang-jwt/jwt/v4"
@@ -17,12 +17,6 @@ var (
 	ErrUserNotFound      = errors.New("user not found")
 	ErrUserServiceError  = errors.New("user service error")
 )
-
-var allowedUserHashes = map[string]interface{}{
-	"admin_admin": nil,
-	"johnd_foo":   nil,
-	"janed_ddd":   nil,
-}
 
 type User struct {
 	Username  string `json:"username"`
@@ -50,7 +44,7 @@ func (h *UserService) Login(ctx context.Context, username, password string) (Use
 	userKey := fmt.Sprintf("%s_%s", username, password)
 
 	if _, ok := h.AllowedUserHashes[userKey]; !ok {
-		return user, ErrInvalidCredentials // this is BAD, business logic layer must not return HTTP-specific errors - is finish i just need to someone check it out and test it fully
+		return user, ErrInvalidCredentials
 	}
 
 	return user, nil
@@ -75,7 +69,7 @@ func (h *UserService) getUser(ctx context.Context, username string) (User, error
 	}
 
 	defer resp.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return user, err
 	}

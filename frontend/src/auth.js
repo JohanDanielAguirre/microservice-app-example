@@ -97,7 +97,7 @@ export default {
 
   isAdmin () {
     const user = store.state.user
-    return user.role === ROLE_ADMIN
+    return (user.role || '').toUpperCase() === ROLE_ADMIN
   },
 
   isLoggedIn () {
@@ -145,8 +145,10 @@ export default {
     var userData = decode(auth.accessToken)
 
     const user = store.state.user
-    user.name = userData.name
-    user.role = userData.role
+    const first = userData.firstname || ''
+    const last = userData.lastname || ''
+    user.name = (first + ' ' + last).trim()
+    user.role = (userData.role || '').toUpperCase()
 
     store.commit('UPDATE_AUTH', auth)
     store.commit('UPDATE_USER', user)

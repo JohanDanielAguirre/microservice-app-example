@@ -16,6 +16,86 @@ In each folder you can find a more in-depth explanation of each component:
 Take a look at the components diagram that describes them and their interactions.
 ![microservice-app-example](/arch-img/Microservices.png)
 
+---
+
+## Quickstart with Docker Compose
+
+We added Dockerfiles for each microservice and a top-level `docker-compose.yml` to run the whole stack locally, including Redis and Zipkin.
+
+### 1) Prepare environment
+
+Create a `.env` file from the example and adjust the secret (must be at least 32 chars):
+
+```bat
+copy .env.example .env
+REM Edit .env and set a strong JWT_SECRET (min 32 chars)
+```
+
+### 2) Start the stack
+
+```bat
+docker compose up -d --build
+```
+
+Services and ports:
+- frontend: http://127.0.0.1:8080
+- auth-api: http://127.0.0.1:8000
+- todos-api: http://127.0.0.1:8082
+- users-api: http://127.0.0.1:8083
+- redis: 127.0.0.1:6379
+- zipkin: http://127.0.0.1:9411
+
+Logs:
+```bat
+docker compose logs -f
+```
+
+Stop:
+```bat
+docker compose down
+```
+
+### 3) Smoke test end-to-end (optional)
+Get a token:
+```bat
+curl -X POST http://127.0.0.1:8000/login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\":\"admin\",\"password\":\"admin\"}"
+```
+Use the `accessToken` to call Todos API:
+```bat
+set TOKEN=PASTE_YOUR_ACCESS_TOKEN_HERE
+curl -H "Authorization: Bearer %TOKEN%" http://127.0.0.1:8082/todos
+curl -X POST -H "Authorization: Bearer %TOKEN%" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"content\":\"demo from curl\"}" ^
+  http://127.0.0.1:8082/todos
+```
+You should see new log messages in `log-message-processor` container and traces in Zipkin.
+
+### 4) Frontend
+Open http://127.0.0.1:8080 and login with one of the example users:
+- admin / admin
+- johnd / foo
+- janed / ddd
+
+---
+
+## Local development (without Docker)
+Refer to each service README for per-service commands. In short:
+- Users API: `mvnw.cmd clean install` then `java -jar target/users-api-0.0.1-SNAPSHOT.jar`
+- Auth API: `go build` then run with `AUTH_API_PORT`, `USERS_API_ADDRESS`, `JWT_SECRET`
+- Todos API: `npm install` and `npm start` (requires `JWT_SECRET`, Redis)
+- Log Processor: `pip install -r requirements.txt` then run with Redis env vars
+- Frontend: `npm install` then `npm start` (dev server + proxies)
+
+Quick controller test for TODOs API (no server required):
+```bat
+cd todos-api
+node tests\test_todoController.js
+```
+
+---
 
 You should also:
 

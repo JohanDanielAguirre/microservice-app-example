@@ -117,12 +117,16 @@ class TodoController {
     _logOperation (opName, username, todoId) {
         this._tracer.scoped(() => {
             const traceId = this._tracer.id;
-            this._redisClient.publish(this._logChannel, JSON.stringify({
+            const payload = JSON.stringify({
                 zipkinSpan: traceId,
                 opName: opName,
                 username: username,
                 todoId: todoId,
-            }))
+            });
+            const pub = this._redisClient.publish(this._logChannel, payload);
+            if (pub && typeof pub.then === 'function') {
+                pub.catch((err) => console.error('Redis publish error:', err));
+            }
         })
     }
 
@@ -144,7 +148,8 @@ class TodoController {
                         content: "Delete example ones",
                     }
                 },
-                lastInsertedID: 3
+                // Comenzar en 4 para evitar duplicar el id 3 existente
+                lastInsertedID: 4
             }
 
             this._setTodoData(userID, data)

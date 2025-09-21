@@ -12,23 +12,22 @@ const {HttpLogger} = require('zipkin-transport-http');
 const zipkinMiddleware = require('zipkin-instrumentation-express').expressMiddleware;
 
 const logChannel = process.env.REDIS_CHANNEL || 'log_channel';
-const redisClient = require("redis").createClient({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  retry_strategy: function (options) {
-      if (options.error && options.error.code === 'ECONNREFUSED') {
-          return new Error('The server refused the connection');
-      }
-      if (options.total_retry_time > 1000 * 60 * 60) {
-          return new Error('Retry time exhausted');
-      }
-      if (options.attempt > 10) {
-          console.log('reattemtping to connect to redis, attempt #' + options.attempt)
-          return undefined;
-      }
-      return Math.min(options.attempt * 100, 2000);
-  }        
+// Migrar a redis v4
+const { createClient } = require('redis');
+const redisHost = process.env.REDIS_HOST || 'localhost';
+const redisPort = process.env.REDIS_PORT || 6379;
+const redisUrl = `redis://${redisHost}:${redisPort}`;
+const redisClient = createClient({ url: redisUrl });
+redisClient.on('error', (err) => {
+  console.error('Redis Client Error:', err);
 });
+// Conectar de forma asíncrona; no bloquea el arranque
+redisClient.connect().then(() => {
+  console.log('Connected to Redis at', redisUrl);
+}).catch((err) => {
+  console.error('Failed to connect to Redis:', err);
+});
+
 const port = process.env.TODO_API_PORT || 8082
 const jwtSecret = process.env.JWT_SECRET
 if (!jwtSecret) {
@@ -59,7 +58,8 @@ app.use(function(req, res, next) {
   next();
 });
 
-app.use(jwt({ secret: jwtSecret }))
+// Configurar express-jwt para HS256 y mantener req.user
+app.use(jwt({ secret: jwtSecret, algorithms: ['HS256'], requestProperty: 'user' }))
 app.use(zipkinMiddleware({tracer}));
 app.use(function (err, req, res, next) {
   if (err.name === 'UnauthorizedError') {

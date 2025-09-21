@@ -109,7 +109,8 @@ export default {
         this.$http.post('/todos', task).then(response => {
           this.newTask = ''
           this.isProcessing = false
-          this.tasks.push(task)
+          // Usar el objeto devuelto por el backend (incluye id)
+          this.tasks.push(response.body)
         }, error => {
           this.isProcessing = false
           this.errorMessage = JSON.stringify(error.body) + '. Response code: ' + error.status

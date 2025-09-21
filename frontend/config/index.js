@@ -29,7 +29,7 @@ module.exports = {
     assetsPublicPath: '/',
     proxyTable: {
       '/login': {
-        target: process.env.AUTH_API_ADDRESS || 'http://127.0.0.1:8081',
+        target: process.env.AUTH_API_ADDRESS || 'http://127.0.0.1:8000',
         secure: false
       },
       '/todos': {
@@ -42,7 +42,7 @@ module.exports = {
           '^/zipkin': ''
         },
         secure: false
-      },      
+      },
     },
     // CSS Sourcemaps off by default because relative paths are "buggy"
     // with this option, according to the CSS-Loader README
