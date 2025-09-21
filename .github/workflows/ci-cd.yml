@@ -1,0 +1,207 @@
+name: CI/CD - Build, Test & Push
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # REGISTRY_HOST: el host del registro (ej. ghcr.io o docker.io). Si no se proporciona, por defecto ghcr.io
+  REGISTRY_HOST: ${{ secrets.REGISTRY_HOST || 'ghcr.io' }}
+  # REGISTRY_OWNER: el namespace/owner dentro del registro. Si no se proporciona, se usa el owner del repo
+  REGISTRY_OWNER: ${{ secrets.REGISTRY_OWNER || github.repository_owner }}
+  # JWT secret necesario para algunos servicios (auth-api, todos-api). Puedes definirlo como secret JWT_SECRET o usar el valor por defecto en CI.
+  JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-secret' }}
+
+jobs:
+  test-and-build:
+    name: Test & Build (sanity checks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (frontend & todos-api)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Install & build frontend
+        working-directory: frontend
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+            # Ejecuta build si existe el script
+            if npm run | grep -q " build"; then
+              npm run build
+            fi
+          else
+            echo "No hay package.json en frontend, se omite"
+          fi
+
+      - name: Run frontend tests (if present)
+        working-directory: frontend
+        run: |
+          if [ -f package.json ]; then
+            if npm run | grep -q " test"; then
+              echo "Found frontend test script, running npm test"
+              npm test
+            else
+              echo "No test script in frontend/package.json, skipping tests"
+            fi
+          fi
+
+      - name: Install & prepare todos-api
+        working-directory: todos-api
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            echo "No hay package.json en todos-api, se omite"
+          fi
+
+      - name: Run todos-api tests (if present)
+        working-directory: todos-api
+        run: |
+          if [ -f package.json ]; then
+            if npm run | grep -q " test"; then
+              echo "Found todos-api test script, running npm test"
+              npm test
+            else
+              echo "No test script in todos-api/package.json, skipping tests"
+            fi
+          fi
+
+      - name: Setup Go (auth-api)
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+
+      - name: Build auth-api (Go)
+        working-directory: auth-api
+        run: |
+          if [ -f main.go ] || [ -f go.mod ]; then
+            go env
+            go build ./...
+          else
+            echo "No parece un proyecto Go en auth-api, se omite"
+          fi
+
+      - name: Run auth-api tests (Go)
+        working-directory: auth-api
+        env:
+          JWT_SECRET: ${{ env.JWT_SECRET }}
+        run: |
+          if [ -f go.mod ] || [ -f main.go ]; then
+            echo "Running go test ./..."
+            go test ./...
+          else
+            echo "No hay módulo Go en auth-api, se omite test"
+          fi
+
+      - name: Setup Java (users-api)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build users-api (Maven) and run tests
+        working-directory: users-api
+        env:
+          JWT_SECRET: ${{ env.JWT_SECRET }}
+        run: |
+          if [ -f pom.xml ]; then
+            # Fuerza la creación del esquema H2 en memoria antes de ejecutar data.sql
+            mvn -B -V -e -Dspring.jpa.hibernate.ddl-auto=create-drop test package
+          else
+            echo "No hay pom.xml en users-api, se omite"
+          fi
+
+      - name: Setup Python (log-message-processor)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install requirements for log-message-processor
+        working-directory: log-message-processor
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No hay requirements.txt en log-message-processor, se omite"
+          fi
+
+      - name: Run Python tests for log-message-processor (if present)
+        working-directory: log-message-processor
+        run: |
+          # Busca tests tipo test_*.py o carpeta tests
+          if ls test_*.py >/dev/null 2>&1 || [ -d tests ]; then
+            echo "Found python tests, running pytest if available otherwise unittest"
+            if python -c "import pytest" >/dev/null 2>&1; then
+              pytest -q || exit 1
+            else
+              python -m unittest discover -v || exit 1
+            fi
+          else
+            echo "No se encontraron tests para log-message-processor"
+          fi
+
+  docker-build-and-push:
+    name: Build and push Docker images
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, todos-api, auth-api, users-api, log-message-processor]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to registry with provided credentials
+        if: ${{ secrets.REGISTRY_USERNAME && secrets.REGISTRY_PASSWORD }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Login to GHCR via GITHUB_TOKEN (fallback)
+        if: ${{ !secrets.REGISTRY_USERNAME || !secrets.REGISTRY_PASSWORD }}
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ matrix.service }}
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_OWNER }}/${{ github.event.repository.name }}:${{ matrix.service }}-${{ github.sha }}
+            ${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_OWNER }}/${{ github.event.repository.name }}:${{ matrix.service }}-latest
+          platforms: linux/amd64
+
+      - name: Image push summary
+        run: |
+          echo "Imagen para servicio ${{ matrix.service }} publicada en ${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_OWNER }}" 
+
+# Notas:
+# - Secrets opcionales: REGISTRY_HOST (ej. ghcr.io o docker.io), REGISTRY_OWNER (org/usuario en el registry)
+# - Si quieres autenticar con usuario/contraseña, define REGISTRY_USERNAME y REGISTRY_PASSWORD
+# - Si no proporcionas credenciales, el workflow hará login en ghcr.io usando GITHUB_TOKEN (asegúrate de dar permisos de packages)
+# - Ajusta versiones de Node/Go/Java/Python según necesites
+# - Para publicar en Docker Hub, establece REGISTRY_HOST=docker.io y REGISTRY_OWNER=<tu-usuario>
