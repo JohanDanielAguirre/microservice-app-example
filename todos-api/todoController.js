@@ -1,7 +1,5 @@
 'use strict';
 const cache = require('memory-cache');
-const {Annotation, 
-    jsonEncoder: {JSON_V2}} = require('zipkin');
 
 // Simple mutex implementation for concurrency safety
 class Mutex {
@@ -34,6 +32,9 @@ class Mutex {
 const OPERATION_CREATE = 'CREATE',
       OPERATION_DELETE = 'DELETE';
 
+// TTL en segundos para claves en Redis (configurable)
+const CACHE_TTL = parseInt(process.env.TODO_CACHE_TTL || '300', 10);
+
 class TodoController {
     constructor({tracer, redisClient, logChannel}) {
         this._tracer = tracer;
@@ -46,7 +47,7 @@ class TodoController {
     async list (req, res) {
         try {
             await this._mutex.lock();
-            const data = this._getTodoData(req.user.username);
+            const data = await this._getTodoData(req.user.username);
             res.json(data.items);
         } catch (error) {
             console.error('Error in list operation:', error);
@@ -67,7 +68,7 @@ class TodoController {
                 return res.status(400).json({ error: 'Content is required and must be a string' });
             }
 
-            const data = this._getTodoData(req.user.username);
+            const data = await this._getTodoData(req.user.username);
             const todo = {
                 content: req.body.content.trim(),
                 id: data.lastInsertedID
@@ -75,7 +76,7 @@ class TodoController {
             
             data.items[data.lastInsertedID] = todo;
             data.lastInsertedID++;
-            this._setTodoData(req.user.username, data);
+            await this._setTodoData(req.user.username, data);
 
             this._logOperation(OPERATION_CREATE, req.user.username, todo.id);
 
@@ -92,7 +93,7 @@ class TodoController {
         try {
             await this._mutex.lock();
             
-            const data = this._getTodoData(req.user.username);
+            const data = await this._getTodoData(req.user.username);
             const id = req.params.taskId;
             
             // Validate that the todo exists
@@ -101,7 +102,7 @@ class TodoController {
             }
             
             delete data.items[id];
-            this._setTodoData(req.user.username, data);
+            await this._setTodoData(req.user.username, data);
 
             this._logOperation(OPERATION_DELETE, req.user.username, id);
 
@@ -123,14 +124,66 @@ class TodoController {
                 username: username,
                 todoId: todoId,
             });
-            const pub = this._redisClient.publish(this._logChannel, payload);
-            if (pub && typeof pub.then === 'function') {
-                pub.catch((err) => console.error('Redis publish error:', err));
+            if (this._redisClient && this._redisClient.publish && this._redisClient.isOpen) {
+                const pub = this._redisClient.publish(this._logChannel, payload);
+                if (pub && typeof pub.then === 'function') {
+                    pub.catch((err) => console.error('Redis publish error:', err));
+                }
+            } else {
+                // Redis not available - no-op or could push to another channel
+                // console.log('Redis not available for publish; payload:', payload);
             }
         })
     }
 
-    _getTodoData (userID) {
+    // Intenta Redis si está disponible (compatible con Azure Cache for Redis). Si no, cae a memory-cache.
+    async _getTodoData (userID) {
+        // Si Redis está activo y conectado, intentar GET
+        try {
+            if (this._redisClient && this._redisClient.isOpen) {
+                const key = `todos:user:${userID}`;
+                const raw = await this._redisClient.get(key);
+                if (raw) {
+                    try {
+                        return JSON.parse(raw);
+                    } catch (e) {
+                        console.error('Failed to parse cached JSON from Redis for', key, e);
+                        // continuar a fallback
+                    }
+                }
+                // No existe en Redis: crear semilla y setear en Redis con TTL
+                const data = {
+                    items: {
+                        '1': {
+                            id: 1,
+                            content: "Create new todo",
+                        },
+                        '2': {
+                            id: 2,
+                            content: "Update me",
+                        },
+                        '3': {
+                            id: 3,
+                            content: "Delete example ones",
+                        }
+                    },
+                    // Comenzar en 4 para evitar duplicar el id 3 existente
+                    lastInsertedID: 4
+                };
+                try {
+                    await this._redisClient.setEx(key, CACHE_TTL, JSON.stringify(data));
+                } catch (e) {
+                    console.error('Failed to set key in Redis, falling back to memory-cache:', e);
+                    cache.put(userID, data);
+                }
+                return data;
+            }
+        } catch (err) {
+            console.error('Error while interacting with Redis in _getTodoData:', err);
+            // continuar a fallback
+        }
+
+        // Fallback: cache en memoria local
         var data = cache.get(userID)
         if (data == null) {
             data = {
@@ -157,7 +210,20 @@ class TodoController {
         return data
     }
 
-    _setTodoData (userID, data) {
+    async _setTodoData (userID, data) {
+        // Si Redis está activo y conectado, intentar SET con TTL
+        try {
+            if (this._redisClient && this._redisClient.isOpen) {
+                const key = `todos:user:${userID}`;
+                await this._redisClient.setEx(key, CACHE_TTL, JSON.stringify(data));
+                return;
+            }
+        } catch (err) {
+            console.error('Error while setting data in Redis:', err);
+            // caer al fallback
+        }
+
+        // Fallback: cache en memoria local
         cache.put(userID, data)
     }
 }

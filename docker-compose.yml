@@ -45,6 +45,8 @@ services:
     environment:
       - TODO_API_PORT=8082
       - JWT_SECRET=${JWT_SECRET}
+      # Forzar la URL de Redis dentro de la red de Docker Compose (evita localhost)
+      - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
@@ -59,6 +61,8 @@ services:
     build: ./log-message-processor
     container_name: log-message-processor
     environment:
+      # Forzar la URL de Redis para este servicio también
+      - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
