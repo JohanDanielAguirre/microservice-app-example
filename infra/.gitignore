@@ -1,0 +1,12 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.tfplan
+.terraformrc
+terraform.rc
+
+# Log files
+hs_err_pid*.log
+replay_pid*.log

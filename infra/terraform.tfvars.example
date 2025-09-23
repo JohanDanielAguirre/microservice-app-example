@@ -1,0 +1,9 @@
+aws_region   = "us-east-1"
+environment  = "dev"
+project      = "microservice-app-example"
+tags = {
+  Owner       = "devops"
+  Environment = "dev"
+  Project     = "microservice-app-example"
+}
+

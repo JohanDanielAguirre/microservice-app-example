@@ -124,3 +124,46 @@ for all developed elements.
 
 Regarding patterns, consider using two of the following: cache aside,
 circuit breaker, autoscaling, federated identity.
+
+---
+
+## Infra & DevOps
+
+CI/CD and Terraform are included to build/publish images and provision Azure resources (RG + ACR).
+
+### CI (GitHub Actions)
+- Workflow: `.github/workflows/ci-docker.yml` builds and pushes images for `auth-api`, `users-api`, `todos-api`, `log-message-processor`, and `frontend` to GHCR under `ghcr.io/<org>/microservice-app-example-<service>` on pushes to `main`.
+- Uses built-in `GITHUB_TOKEN`; no extra secrets required for GHCR.
+
+### IaC (Terraform on Azure)
+- Root: `infra/`
+- Backend template: `infra/backend.tf.example` (copy to `infra/backend.tf` and fill Storage Account/Container details)
+- Example variables: `infra/terraform.tfvars.example` (set `location`, `environment`, optionally `acr_sku`)
+- Modules:
+  - `infra/modules/resource-group` creates the resource group
+  - `infra/modules/acr` creates Azure Container Registry
+
+Local usage:
+```bat
+cd infra
+copy backend.tf.example backend.tf
+copy terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+```
+
+### Terraform in CI (OIDC to Azure)
+- Workflow: `.github/workflows/terraform.yml` logs in to Azure via OIDC and runs `init/validate/plan`; supports manual Apply via workflow dispatch input.
+
+GitHub configuration (Repository Settings → Variables):
+- `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`
+- Optional: `AZURE_LOCATION` (e.g., `eastus`), `ENVIRONMENT` (e.g., `dev`)
+
+Azure prerequisites:
+- Create a Storage Account and a `tfstate` container for Terraform backend; update `infra/backend.tf.example` and copy to `infra/backend.tf`.
+- Create a Federated Credential on an Azure AD App registration (client id above) for your repo (`token.actions.githubusercontent.com`) so GitHub can OIDC login.
+
+### Container images (Azure ACR)
+- Workflow: `.github/workflows/ci-docker.yml` builds and pushes images to ACR.
+- Required repo variables: `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `ACR_LOGIN_SERVER` (e.g., `myregistry.azurecr.io`).

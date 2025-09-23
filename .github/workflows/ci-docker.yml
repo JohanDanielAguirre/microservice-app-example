@@ -1,0 +1,108 @@
+name: CI - Build and Push Images (Azure ACR)
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'auth-api/**'
+      - 'users-api/**'
+      - 'todos-api/**'
+      - 'log-message-processor/**'
+      - 'frontend/**'
+      - '.github/workflows/ci-docker.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      IMAGE_PREFIX: microservice-app-example
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.ACR_LOGIN_SERVER }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags
+        id: vars
+        run: |
+          SHA_TAG=${GITHUB_SHA::7}
+          echo "sha_tag=$SHA_TAG" >> $GITHUB_OUTPUT
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION_TAG=${GITHUB_REF#refs/tags/}
+            echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push auth-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./auth-api
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-auth-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-auth-api:latest
+
+      - name: Build and push users-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./users-api
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-users-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-users-api:latest
+
+      - name: Build and push todos-api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./todos-api
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-todos-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-todos-api:latest
+
+      - name: Build and push log-message-processor
+        uses: docker/build-push-action@v6
+        with:
+          context: ./log-message-processor
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-log-message-processor:${{ steps.vars.outputs.sha_tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-log-message-processor:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-frontend:${{ steps.vars.outputs.sha_tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-frontend:latest
+
