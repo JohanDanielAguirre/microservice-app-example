@@ -1,20 +1,27 @@
-# Auth API (Go)
-# Build stage
-FROM golang:1.18-alpine AS build
+FROM golang:1.23-alpine
+
+# Install git for dependencies
+RUN apk add --no-cache git ca-certificates
+
 WORKDIR /app
-ENV CGO_ENABLED=0
-# Enable modules
-ENV GO111MODULE=on
+
+# Copy source code
 COPY . .
-# Initialize modules if missing and fetch deps
-RUN go mod init auth-api || true && go mod tidy
-# Build static binary
-RUN GOOS=linux GOARCH=amd64 go build -o /auth-api
 
-# Final stage
-FROM alpine:3.18
-WORKDIR /app
-COPY --from=build /auth-api /usr/local/bin/auth-api
+# Initialize go modules and get dependencies based on imports
+RUN go mod init auth-api
+RUN go get github.com/golang-jwt/jwt/v4
+RUN go get github.com/labstack/echo/v4
+RUN go get github.com/labstack/echo/v4/middleware
+RUN go get github.com/labstack/gommon/log
+RUN go mod tidy
+
+# Build the application
+RUN CGO_ENABLED=0 go build -o auth-api .
+
 EXPOSE 8000
-ENTRYPOINT ["auth-api"]
 
+# Environment variables
+ENV AUTH_API_PORT=8000
+
+CMD ["./auth-api"]

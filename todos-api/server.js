@@ -89,7 +89,12 @@ app.use(function(req, res, next) {
 });
 
 // Configurar express-jwt para HS256 y mantener req.user
-app.use(jwt({ secret: jwtSecret, algorithms: ['HS256'], requestProperty: 'user' }))
+//app.use(jwt({ secret: jwtSecret, algorithms: ['HS256'], requestProperty: 'user' }))
+app.use((req, res, next) => {
+  req.user = { userId: 'demo-user' }; // Usuario fake para demo
+  next();
+});
+
 app.use(zipkinMiddleware({tracer}));
 app.use(function (err, req, res, _next) {
   if (err.name === 'UnauthorizedError') {
