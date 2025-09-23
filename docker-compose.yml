@@ -33,6 +33,11 @@ services:
       - USERS_API_ADDRESS=http://users-api:8083
       - JWT_SECRET=${JWT_SECRET}
       - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+      - CB_ENABLED=true
+      - CB_TIMEOUT_MS=2000
+      - CB_RESET_TIMEOUT_MS=10000
+      - CB_ERROR_THRESHOLD=5
+      - CB_REQUEST_TIMEOUT_MS=1500
     ports:
       - "8000:8000"
     depends_on:
@@ -67,6 +72,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
       - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+      - CB_ZIPKIN_FAIL_MAX=5
+      - CB_ZIPKIN_RESET_TIMEOUT=30
+      - CB_ZIPKIN_TIMEOUT=2.0
     depends_on:
       - redis
       - zipkin

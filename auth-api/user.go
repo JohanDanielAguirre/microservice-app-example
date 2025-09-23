@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/sony/gobreaker"
 	jwt "github.com/golang-jwt/jwt/v4"
+    "time"
 )
 
 // Business logic errors
@@ -33,6 +35,8 @@ type UserService struct {
 	Client            HTTPDoer
 	UserAPIAddress    string
 	AllowedUserHashes map[string]interface{}
+    Breaker           *gobreaker.CircuitBreaker
+    RequestTimeout    time.Duration
 }
 
 func (h *UserService) Login(ctx context.Context, username, password string) (User, error) {
@@ -53,34 +57,58 @@ func (h *UserService) Login(ctx context.Context, username, password string) (Use
 func (h *UserService) getUser(ctx context.Context, username string) (User, error) {
 	var user User
 
-	token, err := h.getUserAPIToken(username)
-	if err != nil {
-		return user, err
-	}
-	url := fmt.Sprintf("%s/users/%s", h.UserAPIAddress, username)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("Authorization", "Bearer "+token)
+    exec := func() (User, error) {
+        token, err := h.getUserAPIToken(username)
+        if err != nil {
+            return user, err
+        }
+        url := fmt.Sprintf("%s/users/%s", h.UserAPIAddress, username)
+        req, _ := http.NewRequest("GET", url, nil)
+        req.Header.Add("Authorization", "Bearer "+token)
 
-	req = req.WithContext(ctx)
+        // Apply per-request timeout if configured
+        requestCtx := ctx
+        if h.RequestTimeout > 0 {
+            var cancel context.CancelFunc
+            requestCtx, cancel = context.WithTimeout(ctx, h.RequestTimeout)
+            defer cancel()
+        }
+        req = req.WithContext(requestCtx)
 
-	resp, err := h.Client.Do(req)
-	if err != nil {
-		return user, err
-	}
+        resp, err := h.Client.Do(req)
+        if err != nil {
+            return user, err
+        }
 
-	defer resp.Body.Close()
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return user, err
-	}
+        defer resp.Body.Close()
+        bodyBytes, err := io.ReadAll(resp.Body)
+        if err != nil {
+            return user, err
+        }
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return user, fmt.Errorf("could not get user data: %s", string(bodyBytes))
-	}
+        if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+            return user, fmt.Errorf("could not get user data: %s", string(bodyBytes))
+        }
 
-	err = json.Unmarshal(bodyBytes, &user)
+        err = json.Unmarshal(bodyBytes, &user)
+        return user, err
+    }
 
-	return user, err
+    // Use circuit breaker if configured
+    if h.Breaker != nil {
+        v, err := h.Breaker.Execute(func() (interface{}, error) {
+            return exec()
+        })
+        if err != nil {
+            return user, err
+        }
+        if u, ok := v.(User); ok {
+            return u, nil
+        }
+        return user, ErrUserServiceError
+    }
+
+    return exec()
 }
 
 func (h *UserService) getUserAPIToken(username string) (string, error) {

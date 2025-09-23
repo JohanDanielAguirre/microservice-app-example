@@ -14,6 +14,7 @@ RUN go get github.com/golang-jwt/jwt/v4
 RUN go get github.com/labstack/echo/v4
 RUN go get github.com/labstack/echo/v4/middleware
 RUN go get github.com/labstack/gommon/log
+RUN go get github.com/sony/gobreaker
 RUN go mod tidy
 
 # Build the application

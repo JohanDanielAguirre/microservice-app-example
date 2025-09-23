@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+    "errors"
 	"log"
 	"net/http"
+    "net"
 	"os"
 	"time"
 
@@ -11,6 +14,8 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	gommonlog "github.com/labstack/gommon/log"
+    "github.com/sony/gobreaker"
+    "strconv"
 )
 
 var (
@@ -42,6 +47,34 @@ func main() {
 			"janed_ddd":   nil,
 		},
 	}
+
+    // Circuit Breaker configuration via environment variables
+    if os.Getenv("CB_ENABLED") == "1" || os.Getenv("CB_ENABLED") == "true" {
+        timeoutMs, _ := strconv.Atoi(defaultIfEmpty(os.Getenv("CB_TIMEOUT_MS"), "2000"))
+        resetTimeoutMs, _ := strconv.Atoi(defaultIfEmpty(os.Getenv("CB_RESET_TIMEOUT_MS"), "10000"))
+        errorThreshold, _ := strconv.Atoi(defaultIfEmpty(os.Getenv("CB_ERROR_THRESHOLD"), "5"))
+        requestTimeoutMs, _ := strconv.Atoi(defaultIfEmpty(os.Getenv("CB_REQUEST_TIMEOUT_MS"), "1500"))
+
+        st := gobreaker.Settings{
+            Name:        "users-api-cb",
+            Timeout:     time.Duration(timeoutMs) * time.Millisecond,
+            ReadyToTrip: func(counts gobreaker.Counts) bool { return int(counts.ConsecutiveFailures) >= errorThreshold },
+            Interval:    0,
+            MaxRequests: 1,
+        }
+        // Log state transitions explicitly
+        st.OnStateChange = func(name string, from, to gobreaker.State) {
+            log.Printf("circuit-breaker '%s' state change: %s -> %s", name, stateToString(from), stateToString(to))
+        }
+        // Reset timeout controls open->half-open transition
+        if resetTimeoutMs > 0 {
+            st.Timeout = time.Duration(resetTimeoutMs) * time.Millisecond
+        }
+        userService.Breaker = gobreaker.NewCircuitBreaker(st)
+        if requestTimeoutMs > 0 {
+            userService.RequestTimeout = time.Duration(requestTimeoutMs) * time.Millisecond
+        }
+    }
 
 	e := echo.New()
 	e.Logger.SetLevel(gommonlog.INFO)
@@ -103,6 +136,26 @@ func main() {
 	e.Logger.Fatal(e.Start(hostport))
 }
 
+// defaultIfEmpty returns fallback when s is empty
+func defaultIfEmpty(s, fallback string) string {
+    if s == "" { return fallback }
+    return s
+}
+
+// stateToString converts gobreaker.State to human-readable text
+func stateToString(s gobreaker.State) string {
+    switch s {
+    case gobreaker.StateClosed:
+        return "closed"
+    case gobreaker.StateHalfOpen:
+        return "half-open"
+    case gobreaker.StateOpen:
+        return "open"
+    default:
+        return "unknown"
+    }
+}
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -125,6 +178,17 @@ func getLoginHandler(userService UserService) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		user, err := userService.Login(ctx, requestData.Username, requestData.Password)
 		if err != nil {
+			// Map circuit breaker open state or context deadlines to 503
+			if err == context.DeadlineExceeded {
+				return echo.NewHTTPError(http.StatusServiceUnavailable, "users service timeout")
+			}
+            if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
+                return echo.NewHTTPError(http.StatusServiceUnavailable, "users service unavailable (circuit open)")
+            }
+            var netErr net.Error
+            if errors.As(err, &netErr) {
+                return echo.NewHTTPError(http.StatusServiceUnavailable, "users service network error")
+            }
 			if err == ErrInvalidCredentials {
 				return ErrWrongCredentials
 			}
