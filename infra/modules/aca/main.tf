@@ -103,15 +103,15 @@ resource "azurerm_container_app" "auth_api" {
     container {
       name   = "auth-api"
       image  = local.images.auth
-      cpu    = 0.25
-      memory = "0.5Gi"
+      cpu    = 0.5
+      memory = "1Gi"
       env {
         name  = "AUTH_API_PORT"
         value = "8000"
       }
       env {
         name  = "USERS_API_ADDRESS"
-        value = "https://msapp-dev-users.wonderfulocean-898ef9b4.eastus.azurecontainerapps.io"
+        value = "http://msapp-${var.environment}-users"  # ✅ URL interna
       }
       env {
         name  = "JWT_SECRET"
@@ -242,11 +242,11 @@ resource "azurerm_container_app" "frontend" {
       }
       env {
         name  = "AUTH_API_ADDRESS"
-        value = "http://auth-api:8000"
+        value = "https://msapp-${var.environment}-auth.${azurerm_container_app_environment.env.default_domain}"
       }
       env {
         name  = "TODOS_API_ADDRESS"
-        value = "http://todos-api:8082"
+        value = "https://msapp-${var.environment}-todos.${azurerm_container_app_environment.env.default_domain}"
       }
     }
   }
