@@ -117,6 +117,22 @@ resource "azurerm_container_app" "auth_api" {
         name  = "JWT_SECRET"
         value = var.jwt_secret
       }
+      env {
+        name  = "CB_ENABLED"
+        value = "1"
+      }
+      env {
+        name  = "CB_ERROR_THRESHOLD"
+        value = "3"
+      }
+      env {
+        name  = "CB_TIMEOUT_MS"
+        value = "5000"
+      }
+      env {
+        name  = "CB_REQUEST_TIMEOUT_MS"
+        value = "1000"
+      }
     }
   }
   ingress {
