@@ -207,3 +207,4 @@ Notas operativas:
 - Lecturas: se sirven desde caché una vez calentado; en miss, se crea y se guarda.
 - Escrituras: actualizan la estructura en caché inmediatamente.
 - Para producción: usa DB como fuente de verdad, añade Redis/Memcached como caché distribuida, TTLs, invalidación tras escrituras y métricas.
+

@@ -18,6 +18,21 @@ Take a look at the components diagram that describes them and their interactions
 
 ---
 
+## Extended Documentation (Spanish / Español)
+The following in-depth documentation files have been consolidated under the `DOCS/` directory (Spanish versions):
+
+| Topic | File |
+|-------|------|
+| Project Overview (visión completa, ejecución, patrones) | [DOCS/PROJECT_OVERVIEW_ES.md](DOCS/PROJECT_OVERVIEW_ES.md) |
+| Cache-Aside Pattern (implementación en todos-api) | [DOCS/CACHE_ASIDE.md](DOCS/CACHE_ASIDE.md) |
+| Circuit Breaker (Go auth-api & Python log-processor) | [DOCS/CIRCUIT_BREAKER.md](DOCS/CIRCUIT_BREAKER.md) |
+| CI/CD & Infra Pipelines (workflows propuestos) | [DOCS/PIPELINES.md](DOCS/PIPELINES.md) |
+| Security Improvements & Hardening Roadmap | [DOCS/SECURITY_IMPROVEMENTS.md](DOCS/SECURITY_IMPROVEMENTS.md) |
+
+> NOTE: The original `CACHE_ASIDE.md` and `SECURITY_IMPROVEMENTS.md` at repository root are kept temporarily for backward compatibility. Prefer the versions inside `DOCS/` and you may remove the root files later if no external references depend on them.
+
+---
+
 ## Quickstart with Docker Compose
 
 We added Dockerfiles for each microservice and a top-level `docker-compose.yml` to run the whole stack locally, including Redis and Zipkin.
