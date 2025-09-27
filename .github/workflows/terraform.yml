@@ -2,7 +2,7 @@ name: IaC - Terraform Plan & Apply (Azure)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'Fix/-Zipkin' ]
     paths:
       - 'infra/**'
       - '.github/workflows/terraform.yml'
@@ -72,10 +72,9 @@ jobs:
           path: infra/tfplan
 
       - name: Terraform Apply (auto on main)
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.apply == true)
+        if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || (github.event_name == 'workflow_dispatch' && inputs.apply == true)
         working-directory: infra
         env:
           TF_VAR_location: ${{ vars.AZURE_LOCATION || 'eastus' }}
           TF_VAR_environment: ${{ vars.ENVIRONMENT || 'dev' }}
         run: terraform apply -input=false -auto-approve tfplan || terraform apply -input=false -auto-approve
-

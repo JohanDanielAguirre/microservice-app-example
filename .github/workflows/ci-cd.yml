@@ -2,7 +2,7 @@ name: CI/CD - Deploy & Healthcheck
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'Fix/-Zipkin' ]
   pull_request:
 
 permissions:
