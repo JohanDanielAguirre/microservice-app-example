@@ -17,6 +17,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Preparar variables (.env) para Docker Compose
+        run: |
+          cat > .env <<EOF
+          JWT_SECRET=ci-test-secret
+          EOF
+
       - name: Set up Docker Compose
         run: |
           docker compose version || docker-compose version
@@ -25,18 +31,35 @@ jobs:
         run: |
           docker compose up -d
 
-      - name: Espera a que los servicios estén arriba
+      - name: Espera a que frontend esté arriba (reintentos)
         run: |
-          echo "Esperando 20 segundos para que los servicios arranquen..."
-          sleep 20
+          for i in {1..60}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || true)
+            echo "Intento $i - frontend http status: $STATUS"
+            if [ "$STATUS" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "Frontend no respondió 200 a tiempo" >&2
+          exit 1
 
-      - name: Healthcheck frontend
+      - name: Espera a que todos-api esté arriba (reintentos)
         run: |
-          curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 | grep 200
+          for i in {1..60}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/todos || true)
+            echo "Intento $i - todos-api http status: $STATUS"
+            if [ "$STATUS" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "todos-api no respondió 200 a tiempo" >&2
+          exit 1
 
-      - name: Healthcheck todos-api
+      - name: Logs de contenedores (si falló)
+        if: failure()
         run: |
-          curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/api/todos | grep 200
+          echo "==== docker compose ps ===="
+          docker compose ps || true
+          echo "==== logs (últimas 200 líneas) ===="
+          docker compose logs --no-color --tail=200 || true
 
       - name: Healthcheck log-message-processor
         run: |
@@ -45,4 +68,5 @@ jobs:
       - name: Apaga los servicios
         if: always()
         run: |
+          docker compose ps
           docker compose down
