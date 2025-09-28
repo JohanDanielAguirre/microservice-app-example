@@ -27,9 +27,14 @@ jobs:
       TF_CLI_ARGS_init: -upgrade
       TF_IN_AUTOMATION: true
       TF_INPUT: false
+      # Azure creds (secrets) + ARM_* para OIDC nativo de Terraform
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,12 +44,32 @@ jobs:
         with:
           terraform_version: 1.9.5
 
+      - name: Validate required secrets
+        run: |
+          missing=0
+          for var in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              missing=1
+            else
+              echo "Detected $var"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # OIDC implícito: especificar ids, NO 'auth-type'
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
+          environment: azurecloud
+          allow-no-subscriptions: false
+          audience: api://AzureADTokenExchange
 
       - name: Terraform Init
         working-directory: infra
@@ -60,8 +85,8 @@ jobs:
         id: plan
         working-directory: infra
         env:
-          TF_VAR_location: ${{ secrets.AZURE_LOCATION || 'eastus' }}
-          TF_VAR_environment: ${{ secrets.ENVIRONMENT || 'dev' }}
+          TF_VAR_location: ${{ secrets.AZURE_LOCATION != '' && secrets.AZURE_LOCATION || 'eastus' }}
+          TF_VAR_environment: ${{ secrets.ENVIRONMENT != '' && secrets.ENVIRONMENT || 'dev' }}
         run: |
           terraform plan -input=false -out=tfplan
 
@@ -75,6 +100,6 @@ jobs:
         if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) || (github.event_name == 'workflow_dispatch' && inputs.apply == true)
         working-directory: infra
         env:
-          TF_VAR_location: ${{ secrets.AZURE_LOCATION || 'eastus' }}
-          TF_VAR_environment: ${{ secrets.ENVIRONMENT || 'dev' }}
+          TF_VAR_location: ${{ secrets.AZURE_LOCATION != '' && secrets.AZURE_LOCATION || 'eastus' }}
+          TF_VAR_environment: ${{ secrets.ENVIRONMENT != '' && secrets.ENVIRONMENT || 'dev' }}
         run: terraform apply -input=false -auto-approve tfplan || terraform apply -input=false -auto-approve
