@@ -19,26 +19,48 @@ jobs:
       contents: read
       id-token: write
     env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+      # Tomar valores desde secrets en lugar de vars
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
       IMAGE_PREFIX: microservice-app-example
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        run: |
+          missing=0
+          for var in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID ACR_LOGIN_SERVER; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              missing=1
+            else
+              echo "Detected $var"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          # Forzar OIDC y pasar credenciales desde secrets
+          auth-type: ID_TOKEN
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: false
+          environment: azurecloud
+          allow-no-subscriptions: false
+          audience: api://AzureADTokenExchange
 
       - name: ACR login
         uses: azure/docker-login@v2
         with:
-          login-server: ${{ env.ACR_LOGIN_SERVER }}
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -63,8 +85,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-auth-api:${{ steps.vars.outputs.sha_tag }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-auth-api:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-auth-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-auth-api:latest
 
       - name: Build and push users-api
         uses: docker/build-push-action@v6
@@ -73,8 +95,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-users-api:${{ steps.vars.outputs.sha_tag }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-users-api:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-users-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-users-api:latest
 
       - name: Build and push todos-api
         uses: docker/build-push-action@v6
@@ -83,8 +105,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-todos-api:${{ steps.vars.outputs.sha_tag }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-todos-api:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-todos-api:${{ steps.vars.outputs.sha_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-todos-api:latest
 
       - name: Build and push log-message-processor
         uses: docker/build-push-action@v6
@@ -93,8 +115,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-log-message-processor:${{ steps.vars.outputs.sha_tag }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-log-message-processor:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-log-message-processor:${{ steps.vars.outputs.sha_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-log-message-processor:latest
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -103,5 +125,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-frontend:${{ steps.vars.outputs.sha_tag }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_PREFIX }}-frontend:latest
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-frontend:${{ steps.vars.outputs.sha_tag }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.IMAGE_PREFIX }}-frontend:latest
