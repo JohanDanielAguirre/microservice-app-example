@@ -1,8 +1,8 @@
 'use strict';
 const TodoController = require('./todoController');
-module.exports = function (app, {tracer, redisClient, logChannel}) {
-  const todoController = new TodoController({tracer, redisClient, logChannel});
-  
+module.exports = function (app, {redisClient, logChannel}) {
+  const todoController = new TodoController({redisClient, logChannel});
+
   // Ruta raíz para evitar "Cannot GET /" y "Method Not Allowed"
   app.get('/', function(req, res) {
     res.json({

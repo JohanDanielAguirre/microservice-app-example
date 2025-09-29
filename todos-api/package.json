@@ -13,11 +13,7 @@
     "express": "^4.18.2",
     "express-jwt": "^6.1.0",
     "memory-cache": "^0.2.0",
-    "redis": "^4.6.7",
-    "zipkin": "^0.22.0",
-    "zipkin-context-cls": "^0.22.0",
-    "zipkin-instrumentation-express": "^0.22.0",
-    "zipkin-transport-http": "^0.22.0"
+    "redis": "^4.6.7"
   },
   "devDependencies": {
     "nodemon": "^1.11.0"

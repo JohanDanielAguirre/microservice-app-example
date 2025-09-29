@@ -1,18 +1,5 @@
-import {
-  Tracer,
-  BatchRecorder,
-  ExplicitContext,
-  jsonEncoder
-} from 'zipkin'
-import {HttpLogger} from 'zipkin-transport-http'
-import {zipkinInterceptor} from 'zipkin-instrumentation-vue-resource'
-const ZIPKIN_URL = window.location.protocol + '//' + window.location.host + '/zipkin'
-/**
-* Tracing plugin that uses Zipkin. Initiates new traces with outgoing requests
-* and injects appropriate headers.
-*/
+// Zipkin tracing eliminado: este plugin es un no-op
 export default {
-
   /**
    * Install the Auth class.
    *
@@ -24,19 +11,6 @@ export default {
    * @return {void}
    */
   install (Vue, options) {
-    const serviceName = 'frontend'
-    const tracer = new Tracer({
-      ctxImpl: new ExplicitContext(),
-      recorder: new BatchRecorder({
-        logger: new HttpLogger({
-          endpoint: ZIPKIN_URL,
-          jsonEncoder: jsonEncoder.JSON_V2
-        })
-      }),
-      localServiceName: serviceName
-    })
-
-    const interceptor = zipkinInterceptor({tracer, serviceName})
-    Vue.http.interceptors.push(interceptor)
+    // no-op
   }
 }

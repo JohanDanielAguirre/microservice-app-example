@@ -79,19 +79,6 @@ func main() {
 	e := echo.New()
 	e.Logger.SetLevel(gommonlog.INFO)
 
-	if zipkinURL := os.Getenv("ZIPKIN_URL"); len(zipkinURL) != 0 {
-		e.Logger.Infof("init tracing to Zipkit at %s", zipkinURL)
-
-		if tracedMiddleware, tracedClient, err := initTracing(zipkinURL); err == nil {
-			e.Use(echo.WrapMiddleware(tracedMiddleware))
-			userService.Client = tracedClient
-		} else {
-			e.Logger.Infof("Zipkin tracer init failed: %s", err.Error())
-		}
-	} else {
-		e.Logger.Infof("Zipkin URL was not provided, tracing is not initialised")
-	}
-
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	

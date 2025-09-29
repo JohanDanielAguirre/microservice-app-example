@@ -36,8 +36,7 @@ const OPERATION_CREATE = 'CREATE',
 const CACHE_TTL = parseInt(process.env.TODO_CACHE_TTL || '300', 10);
 
 class TodoController {
-    constructor({tracer, redisClient, logChannel}) {
-        this._tracer = tracer;
+    constructor({redisClient, logChannel}) {
         this._redisClient = redisClient;
         this._logChannel = logChannel;
         this._mutex = new Mutex();
@@ -116,24 +115,20 @@ class TodoController {
     }
 
     _logOperation (opName, username, todoId) {
-        this._tracer.scoped(() => {
-            const traceId = this._tracer.id;
-            const payload = JSON.stringify({
-                zipkinSpan: traceId,
-                opName: opName,
-                username: username,
-                todoId: todoId,
-            });
-            if (this._redisClient && this._redisClient.publish && this._redisClient.isOpen) {
-                const pub = this._redisClient.publish(this._logChannel, payload);
-                if (pub && typeof pub.then === 'function') {
-                    pub.catch((err) => console.error('Redis publish error:', err));
-                }
-            } else {
-                // Redis not available - no-op or could push to another channel
-                // console.log('Redis not available for publish; payload:', payload);
+        const payload = JSON.stringify({
+            opName: opName,
+            username: username,
+            todoId: todoId,
+            ts: Date.now()
+        });
+        if (this._redisClient && this._redisClient.publish && this._redisClient.isOpen) {
+            const pub = this._redisClient.publish(this._logChannel, payload);
+            if (pub && typeof pub.then === 'function') {
+                pub.catch((err) => console.error('Redis publish error:', err));
             }
-        })
+        } else {
+            // Redis not available - no-op
+        }
     }
 
     // Intenta Redis si está disponible (compatible con Azure Cache for Redis). Si no, cae a memory-cache.

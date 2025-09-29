@@ -7,23 +7,14 @@ services:
     ports:
       - "6379:6379"
 
-  zipkin:
-    image: openzipkin/zipkin:2
-    container_name: zipkin
-    ports:
-      - "9411:9411"
-
   users-api:
     build: ./users-api
     container_name: users-api
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - SERVER_PORT=8083
-      - SPRING_ZIPKIN_BASEURL=http://zipkin:9411/
     ports:
       - "8083:8083"
-    depends_on:
-      - zipkin
 
   auth-api:
     build: ./auth-api
@@ -32,7 +23,6 @@ services:
       - AUTH_API_PORT=8000
       - USERS_API_ADDRESS=http://users-api:8083
       - JWT_SECRET=${JWT_SECRET}
-      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
       - CB_ENABLED=true
       - CB_TIMEOUT_MS=2000
       - CB_RESET_TIMEOUT_MS=10000
@@ -42,7 +32,6 @@ services:
       - "8000:8000"
     depends_on:
       - users-api
-      - zipkin
 
   todos-api:
     build: ./todos-api
@@ -55,12 +44,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
-      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
     ports:
       - "8082:8082"
     depends_on:
       - redis
-      - zipkin
 
   log-message-processor:
     build: ./log-message-processor
@@ -71,13 +58,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_CHANNEL=log_channel
-      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
-      - CB_ZIPKIN_FAIL_MAX=5
-      - CB_ZIPKIN_RESET_TIMEOUT=30
-      - CB_ZIPKIN_TIMEOUT=2.0
     depends_on:
       - redis
-      - zipkin
 
   frontend:
     build: ./frontend
@@ -86,11 +68,8 @@ services:
       - PORT=8080
       - AUTH_API_ADDRESS=http://auth-api:8000
       - TODOS_API_ADDRESS=http://todos-api:8082
-      # Tracing del servidor deshabilitado para evitar duplicación de cabeceras en el proxy
-      # - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
     ports:
       - "8080:8080"
     depends_on:
       - auth-api
       - todos-api
-      - zipkin
