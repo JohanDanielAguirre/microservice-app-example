@@ -148,7 +148,7 @@ class TodoController {
                         return JSON.parse(raw);
                     } catch (e) {
                         console.error('Failed to parse cached JSON from Redis for', key, e);
-                        // continuar a fallback
+                        console.log("logs")
                     }
                 }
                 // No existe en Redis: crear semilla y setear en Redis con TTL
